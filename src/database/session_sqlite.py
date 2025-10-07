@@ -42,3 +42,8 @@ async def reset_sqlite_database() -> None:
     async with sqlite_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
+
+
+async def reset_database() -> None:
+    """Alias для тестів: очікують reset_database з пакета `database`."""
+    await reset_sqlite_database()
