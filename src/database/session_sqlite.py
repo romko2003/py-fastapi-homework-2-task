@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from config import get_settings
-from .models import Base  # важливо: відносний імпорт, щоб не створювати цикл
+from .models import Base
 
 settings = get_settings()
 

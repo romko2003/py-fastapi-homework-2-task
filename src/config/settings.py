@@ -1,3 +1,4 @@
+# src/config/settings.py
 from __future__ import annotations
 
 import os
@@ -23,7 +24,6 @@ class Settings(BaseAppSettings):
 
 
 class TestingSettings(BaseAppSettings):
-    # для тестів: SQLite in-memory та тестові дані
     def model_post_init(self, __context: dict[str, Any] | None = None) -> None:  # type: ignore[override]
         object.__setattr__(self, "PATH_TO_DB", ":memory:")
         object.__setattr__(
@@ -35,12 +35,6 @@ class TestingSettings(BaseAppSettings):
 
 @lru_cache
 def get_settings() -> BaseAppSettings:
-    """
-    Повертає конфіг проєкту.
-    Вмикає тестові налаштування, якщо:
-      - ENVIRONMENT == "testing" або
-      - TESTING у середовищі дорівнює "1"/"true"/"True"
-    """
     env = os.getenv("ENVIRONMENT", "developing").lower()
     testing_flag = os.getenv("TESTING", "0") in ("1", "true", "True")
     if env == "testing" or testing_flag:

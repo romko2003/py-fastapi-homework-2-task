@@ -3,10 +3,7 @@ from fastapi import FastAPI
 
 # Для тестів (SQLite):
 from database.session_sqlite import init_db, close_db
-# Якщо запускаєш дев із Postgres — заміни рядок вище на:
-# from database.session_postgresql import init_db, close_db
 
-# Роутер беремо прямо з файлу маршрутів
 from routes.movies import router as movie_router
 
 

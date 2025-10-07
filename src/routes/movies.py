@@ -128,7 +128,6 @@ async def create_movie(
     payload: MovieCreateSchema,
     db: AsyncSession = Depends(get_db),
 ):
-    # перевірка дублікату (name, date)
     dup = await db.execute(
         select(MovieModel).where(
             and_(MovieModel.name == payload.name, MovieModel.date == payload.date)
