@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -6,7 +9,7 @@ from pydantic_settings import BaseSettings
 
 
 class BaseAppSettings(BaseSettings):
-    BASE_DIR: Path = Path(__file__).parent.parent
+    BASE_DIR: Path = Path(__file__).resolve().parents[1]
     PATH_TO_DB: str = str(BASE_DIR / "database" / "source" / "theater.db")
     PATH_TO_MOVIES_CSV: str = str(BASE_DIR / "database" / "seed_data" / "imdb_movies.csv")
 
@@ -20,18 +23,26 @@ class Settings(BaseAppSettings):
 
 
 class TestingSettings(BaseAppSettings):
-
-    def model_post_init(self, __context: dict[str, Any] | None = None) -> None:
-        object.__setattr__(self, 'PATH_TO_DB', ":memory:")
+    # для тестів: SQLite in-memory та тестові дані
+    def model_post_init(self, __context: dict[str, Any] | None = None) -> None:  # type: ignore[override]
+        object.__setattr__(self, "PATH_TO_DB", ":memory:")
         object.__setattr__(
             self,
-            'PATH_TO_MOVIES_CSV',
-            str(self.BASE_DIR / "database" / "seed_data" / "test_data.csv")
+            "PATH_TO_MOVIES_CSV",
+            str(self.BASE_DIR / "database" / "seed_data" / "test_data.csv"),
         )
 
 
-def get_settings() -> BaseSettings:
-    environment = os.getenv("ENVIRONMENT", "developing")
-    if environment == "testing":
+@lru_cache
+def get_settings() -> BaseAppSettings:
+    """
+    Повертає конфіг проєкту.
+    Вмикає тестові налаштування, якщо:
+      - ENVIRONMENT == "testing" або
+      - TESTING у середовищі дорівнює "1"/"true"/"True"
+    """
+    env = os.getenv("ENVIRONMENT", "developing").lower()
+    testing_flag = os.getenv("TESTING", "0") in ("1", "true", "True")
+    if env == "testing" or testing_flag:
         return TestingSettings()
     return Settings()

@@ -17,11 +17,12 @@ AsyncSQLiteSessionLocal = sessionmaker(  # type: ignore
     expire_on_commit=False,
 )
 
-# ==== потрібна функція get_db (для Depends у роутерах/тестах) ====
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSQLiteSessionLocal() as session:
         yield session
 # ================================================================
+
 
 async def get_sqlite_db() -> AsyncGenerator[AsyncSession, None]:
     """Alias: те саме, що й get_db, залишено для сумісності."""
