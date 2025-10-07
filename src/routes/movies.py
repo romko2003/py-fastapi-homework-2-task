@@ -40,14 +40,13 @@ async def _get_or_create(
     by: dict,
     defaults: dict | None = None,
 ):
-    """Повертає існуючий або створює новий обʼєкт."""
     res = await db.execute(select(model).filter_by(**by))
     obj = res.scalar_one_or_none()
     if obj:
         return obj
     obj = model(**by, **(defaults or {}))
     db.add(obj)
-    await db.flush()  # щоб отримати id
+    await db.flush()
     return obj
 
 
@@ -107,7 +106,7 @@ async def list_movies(
         for m in rows
     ]
 
-    # Тести очікують шляхи БЕЗ /api/v1 префікса
+    # Тести очікують шляхи БЕЗ /api/v1
     base_path = "/theater/movies/"
     prev_page: Optional[str] = (
         f"{base_path}?page={page-1}&per_page={per_page}" if page > 1 else None
@@ -130,7 +129,7 @@ async def create_movie(
     payload: MovieCreateSchema,
     db: AsyncSession = Depends(get_db),
 ):
-    # Перевірка на дублікат
+    # Дублікат
     dup = await db.execute(
         select(MovieModel).where(
             and_(MovieModel.name == payload.name, MovieModel.date == payload.date)
@@ -145,14 +144,14 @@ async def create_movie(
             ),
         )
 
-    # В моделі country_id NOT NULL — країна має бути задана
+    # country обов’язкова (NOT NULL у моделі)
     if not payload.country:
         raise HTTPException(status_code=400, detail="Invalid input data.")
 
-    # Спочатку підготуємо звʼязані сутності
+    # Підготуємо звʼязані сутності
     country = await _get_or_create(db, CountryModel, by={"code": payload.country})
 
-    # Створюємо сам фільм — ВЖЕ з country
+    # Створюємо фільм з country
     movie = MovieModel(
         name=payload.name,
         date=payload.date,
@@ -165,7 +164,11 @@ async def create_movie(
     )
     db.add(movie)
 
-    # M2M звʼязки
+    # ВАЖЛИВО: отримати id і попередньо завантажити колекції, щоб не було lazy-load у сеттері
+    await db.flush()
+    await db.refresh(movie, attribute_names=["genres", "actors", "languages"])
+
+    # M2M
     if payload.genres:
         movie.genres = [await _get_or_create(db, GenreModel, by={"name": g}) for g in payload.genres]
     if payload.actors:
@@ -178,7 +181,7 @@ async def create_movie(
 
     await db.commit()
 
-    # перечитаємо з eager-load, щоб уникнути MissingGreenlet при серіалізації
+    # Перечитуємо з eager-load і .unique()
     stmt = (
         select(MovieModel)
         .options(
@@ -189,13 +192,13 @@ async def create_movie(
         )
         .where(MovieModel.id == movie.id)
     )
-    movie = (await db.execute(stmt)).scalar_one()
+    movie = (await db.execute(stmt)).unique().scalar_one()
     return _serialize_full(movie)
 
 
 @router.get("/{movie_id}/", response_model=MovieFullSchema)
 async def movie_details(movie_id: int, db: AsyncSession = Depends(get_db)):
-    # Eager-load звʼязки, щоб не було MissingGreenlet
+    # Eager-load + .unique()
     stmt = (
         select(MovieModel)
         .options(
@@ -207,7 +210,7 @@ async def movie_details(movie_id: int, db: AsyncSession = Depends(get_db)):
         .where(MovieModel.id == movie_id)
     )
     res = await db.execute(stmt)
-    movie = res.scalar_one_or_none()
+    movie = res.unique().scalar_one_or_none()
     if movie is None:
         raise HTTPException(
             status_code=404, detail="Movie with the given ID was not found."
@@ -225,7 +228,7 @@ async def delete_movie(movie_id: int, db: AsyncSession = Depends(get_db)):
         )
     await db.delete(movie)
     await db.commit()
-    return  # 204 No Content
+    return
 
 
 @router.patch("/{movie_id}/")
@@ -241,7 +244,6 @@ async def update_movie(
             status_code=404, detail="Movie with the given ID was not found."
         )
 
-    # часткове оновлення
     try:
         if payload.name is not None:
             movie.name = payload.name
