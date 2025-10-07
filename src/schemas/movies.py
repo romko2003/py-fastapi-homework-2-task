@@ -63,7 +63,6 @@ class MovieCreateSchema(BaseModel):
     actors: List[str] = Field(default_factory=list)
     languages: List[str] = Field(default_factory=list)
 
-
     @field_validator("date")
     @classmethod
     def validate_date(cls, v: dt.date) -> dt.date:
@@ -71,14 +70,12 @@ class MovieCreateSchema(BaseModel):
             raise ValueError("date must not be more than one year in the future")
         return v
 
-
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
         if v not in _ALLOWED_STATUSES:
             raise ValueError("status must be one of: Released | Post Production | In Production")
         return v
-
 
     @field_validator("country")
     @classmethod
@@ -98,7 +95,6 @@ class MovieUpdateSchema(BaseModel):
     budget: Optional[float] = Field(default=None, ge=0)
     revenue: Optional[float] = Field(default=None, ge=0)
 
-
     @field_validator("date")
     @classmethod
     def validate_date(cls, v: Optional[dt.date]) -> Optional[dt.date]:
@@ -107,7 +103,6 @@ class MovieUpdateSchema(BaseModel):
         if v > (dt.date.today() + dt.timedelta(days=365)):
             raise ValueError("date must not be more than one year in the future")
         return v
-
 
     @field_validator("status")
     @classmethod
