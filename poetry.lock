@@ -261,6 +261,17 @@ pycodestyle = ">=2.12.0,<2.13.0"
 pyflakes = ">=3.2.0,<3.3.0"
 
 [[package]]
+name = "functions"
+version = "0.7.0"
+description = "Functional programming in Python"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "functions-0.7.0.tar.gz", hash = "sha256:5a36bd11d36bbce210fecddd9ff1a475a86035905818a4075d6c7ebb2f714181"},
+]
+
+[[package]]
 name = "greenlet"
 version = "3.1.1"
 description = "Lightweight in-process concurrent programming"
@@ -1078,6 +1089,21 @@ files = [
 ]
 
 [[package]]
+name = "schemas"
+version = "0.7.1"
+description = "Python library for marshalling and validation"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "schemas-0.7.1.tar.gz", hash = "sha256:b54542abe1daa322e8229d7b952b8adecaf77c1e2439f48af72a1cb1d6f7f127"},
+]
+
+[package.dependencies]
+functions = "*"
+pytest = "*"
+
+[[package]]
 name = "six"
 version = "1.17.0"
 description = "Python 2 and 3 compatibility utilities"
@@ -1327,4 +1353,4 @@ standard = ["colorama (>=0.4) ; sys_platform == \"win32\"", "httptools (>=0.6.3)
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "4722a55635e5f880f26bbe416a97aeb4d5251e16c399a39060df275ba96ec4ba"
+content-hash = "f0fa509282f030e5a40ed6253b0292c863ea49280e7420bab21100ab87c789f4"

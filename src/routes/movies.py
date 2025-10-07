@@ -8,21 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database.models import (
-    MovieModel,
-    GenreModel,
-    ActorModel,
-    CountryModel,
-    LanguageModel,
-)
-from ..database.session_sqlite import get_db
-from ..schemas.movies import (
-    MovieBriefSchema,
-    MovieFullSchema,
-    MoviesListResponse,
-    MovieCreateSchema,
-    MovieUpdateSchema,
-)
+# ВАЖЛИВО: абсолютні імпорти від кореня src/
+from database.models import MovieModel, GenreModel, ActorModel, CountryModel, LanguageModel
+from database.session_sqlite import get_db
+from schemas.movies import MovieBriefSchema, MovieFullSchema, MoviesListResponse, MovieCreateSchema, MovieUpdateSchema
+
 
 router = APIRouter(prefix="/movies", tags=["Movies"])
 
@@ -106,7 +96,7 @@ async def list_movies(
         for m in rows
     ]
 
-    base_path = _path_only(request.url_for("list_movies"))
+    base_path = _path_only(str(request.url_for("list_movies")))
     prev_page: Optional[str] = (
         f"{base_path}?page={page-1}&per_page={per_page}" if page > 1 else None
     )
