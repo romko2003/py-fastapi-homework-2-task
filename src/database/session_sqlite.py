@@ -4,8 +4,7 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-
-from config import get_settings
+from config.settings import get_settings
 from .models import Base
 
 settings = get_settings()
@@ -26,7 +25,7 @@ async def init_db() -> None:
 
 async def close_db() -> None:
     await sqlite_engine.dispose()
-# =================================
+# ----------------------------
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -34,6 +33,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+# Сумісність з тестами/старим кодом:
 async def get_sqlite_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSQLiteSessionLocal() as session:
         yield session

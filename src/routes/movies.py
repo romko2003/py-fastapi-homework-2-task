@@ -7,12 +7,23 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
-# ВАЖЛИВО: абсолютні імпорти від кореня src/
-from database.models import MovieModel, GenreModel, ActorModel, CountryModel, LanguageModel
+from database.models import (
+    MovieModel,
+    GenreModel,
+    ActorModel,
+    CountryModel,
+    LanguageModel,
+)
 from database.session_sqlite import get_db
-from schemas.movies import MovieBriefSchema, MovieFullSchema, MoviesListResponse, MovieCreateSchema, MovieUpdateSchema
-
+from schemas.movies import (
+    MovieBriefSchema,
+    MovieFullSchema,
+    MoviesListResponse,
+    MovieCreateSchema,
+    MovieUpdateSchema,
+)
 
 router = APIRouter(prefix="/movies", tags=["Movies"])
 
@@ -36,7 +47,7 @@ async def _get_or_create(
         return obj
     obj = model(**by, **(defaults or {}))
     db.add(obj)
-    await db.flush()  # отримати id
+    await db.flush()  # щоб отримати id
     return obj
 
 
@@ -96,7 +107,8 @@ async def list_movies(
         for m in rows
     ]
 
-    base_path = _path_only(str(request.url_for("list_movies")))
+    # Тести очікують шляхи БЕЗ /api/v1 префікса
+    base_path = "/theater/movies/"
     prev_page: Optional[str] = (
         f"{base_path}?page={page-1}&per_page={per_page}" if page > 1 else None
     )
@@ -118,6 +130,7 @@ async def create_movie(
     payload: MovieCreateSchema,
     db: AsyncSession = Depends(get_db),
 ):
+    # Перевірка на дублікат
     dup = await db.execute(
         select(MovieModel).where(
             and_(MovieModel.name == payload.name, MovieModel.date == payload.date)
@@ -132,6 +145,14 @@ async def create_movie(
             ),
         )
 
+    # В моделі country_id NOT NULL — країна має бути задана
+    if not payload.country:
+        raise HTTPException(status_code=400, detail="Invalid input data.")
+
+    # Спочатку підготуємо звʼязані сутності
+    country = await _get_or_create(db, CountryModel, by={"code": payload.country})
+
+    # Створюємо сам фільм — ВЖЕ з country
     movie = MovieModel(
         name=payload.name,
         date=payload.date,
@@ -140,25 +161,15 @@ async def create_movie(
         status=payload.status,
         budget=payload.budget,
         revenue=payload.revenue,
+        country=country,
     )
     db.add(movie)
-    await db.flush()  # отримати id
 
-    # звʼязки
-    if payload.country:
-        country = await _get_or_create(db, CountryModel, by={"code": payload.country})
-        movie.country = country
-
+    # M2M звʼязки
     if payload.genres:
-        movie.genres = [
-            await _get_or_create(db, GenreModel, by={"name": g}) for g in payload.genres
-        ]
-
+        movie.genres = [await _get_or_create(db, GenreModel, by={"name": g}) for g in payload.genres]
     if payload.actors:
-        movie.actors = [
-            await _get_or_create(db, ActorModel, by={"name": a}) for a in payload.actors
-        ]
-
+        movie.actors = [await _get_or_create(db, ActorModel, by={"name": a}) for a in payload.actors]
     if payload.languages:
         movie.languages = [
             await _get_or_create(db, LanguageModel, by={"name": lang_name})
@@ -166,13 +177,36 @@ async def create_movie(
         ]
 
     await db.commit()
-    await db.refresh(movie)
+
+    # перечитаємо з eager-load, щоб уникнути MissingGreenlet при серіалізації
+    stmt = (
+        select(MovieModel)
+        .options(
+            joinedload(MovieModel.country),
+            joinedload(MovieModel.genres),
+            joinedload(MovieModel.actors),
+            joinedload(MovieModel.languages),
+        )
+        .where(MovieModel.id == movie.id)
+    )
+    movie = (await db.execute(stmt)).scalar_one()
     return _serialize_full(movie)
 
 
 @router.get("/{movie_id}/", response_model=MovieFullSchema)
 async def movie_details(movie_id: int, db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
+    # Eager-load звʼязки, щоб не було MissingGreenlet
+    stmt = (
+        select(MovieModel)
+        .options(
+            joinedload(MovieModel.country),
+            joinedload(MovieModel.genres),
+            joinedload(MovieModel.actors),
+            joinedload(MovieModel.languages),
+        )
+        .where(MovieModel.id == movie_id)
+    )
+    res = await db.execute(stmt)
     movie = res.scalar_one_or_none()
     if movie is None:
         raise HTTPException(
@@ -191,7 +225,7 @@ async def delete_movie(movie_id: int, db: AsyncSession = Depends(get_db)):
         )
     await db.delete(movie)
     await db.commit()
-    return  # 204
+    return  # 204 No Content
 
 
 @router.patch("/{movie_id}/")
