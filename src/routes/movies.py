@@ -1,19 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
-
-from database import get_db, MovieModel
-from database.models import CountryModel, GenreModel, ActorModel, LanguageModel
-
-
-router = APIRouter()
-
 from __future__ import annotations
 
 from math import ceil
-from typing import Iterable, Optional
+from typing import Optional
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -27,8 +15,7 @@ from ..database.models import (
     CountryModel,
     LanguageModel,
 )
-from ..database.session_sqlite import get_db as get_db_sqlite  # на тестах може використовуватися SQLite
-from ..database.session_postgresql import get_db as get_db_pg  # у деві — Postgres
+from ..database.session_sqlite import get_db
 from ..schemas.movies import (
     MovieBriefSchema,
     MovieFullSchema,
@@ -40,16 +27,19 @@ from ..schemas.movies import (
 router = APIRouter(prefix="/movies", tags=["Movies"])
 
 
-# --- утиліти ---
-
 def _path_only(url: str) -> str:
     return urlparse(url).path
 
 
 async def _get_or_create(
-    db: AsyncSession, model, /, *, by: dict, defaults: dict | None = None
+    db: AsyncSession,
+    model,
+    /,
+    *,
+    by: dict,
+    defaults: dict | None = None,
 ):
-    """Повертає існуючий або створює новий об’єкт"""
+    """Повертає існуючий або створює новий обʼєкт."""
     res = await db.execute(select(model).filter_by(**by))
     obj = res.scalar_one_or_none()
     if obj:
@@ -70,25 +60,14 @@ def _serialize_full(m: MovieModel) -> MovieFullSchema:
         status=m.status,
         budget=float(m.budget) if m.budget is not None else None,
         revenue=float(m.revenue) if m.revenue is not None else None,
-        country=(
-            None
-            if m.country is None
-            else {"id": m.country.id, "code": m.country.code, "name": m.country.name}
-        ),
+        country=None
+        if m.country is None
+        else {"id": m.country.id, "code": m.country.code, "name": m.country.name},
         genres=[{"id": g.id, "name": g.name} for g in (m.genres or [])],
         actors=[{"id": a.id, "name": a.name} for a in (m.actors or [])],
-        languages=[{"id": l.id, "name": l.name} for l in (m.languages or [])],
+        languages=[{"id": lang.id, "name": lang.name} for lang in (m.languages or [])],
     )
 
-
-# Вибір генератора сесій:
-# якщо обидва доступні — використовуй той, що підключений у твоєму проекті.
-# Для сумісності з тестами FastAPI/SQLite за замовчуванням беремо sqlite.
-def get_db() -> AsyncSession:
-    return get_db_sqlite()
-
-
-# --- ENDPOINTS ---
 
 @router.get("/", response_model=MoviesListResponse)
 async def list_movies(
@@ -109,7 +88,6 @@ async def list_movies(
         raise HTTPException(status_code=404, detail="No movies found.")
 
     offset = (page - 1) * per_page
-
     result = await db.execute(
         select(MovieModel).order_by(MovieModel.id.desc()).offset(offset).limit(per_page)
     )
@@ -119,20 +97,22 @@ async def list_movies(
 
     movies = [
         MovieBriefSchema(
-            id=m.id, name=m.name, date=m.date, score=m.score, overview=m.overview
+            id=m.id,
+            name=m.name,
+            date=m.date,
+            score=m.score,
+            overview=m.overview,
         )
         for m in rows
     ]
 
     base_path = _path_only(request.url_for("list_movies"))
-
-    prev_page: Optional[str] = None
-    if page > 1:
-        prev_page = f"{base_path}?page={page-1}&per_page={per_page}"
-
-    next_page: Optional[str] = None
-    if page < total_pages:
-        next_page = f"{base_path}?page={page+1}&per_page={per_page}"
+    prev_page: Optional[str] = (
+        f"{base_path}?page={page-1}&per_page={per_page}" if page > 1 else None
+    )
+    next_page: Optional[str] = (
+        f"{base_path}?page={page+1}&per_page={per_page}" if page < total_pages else None
+    )
 
     return MoviesListResponse(
         movies=movies,
@@ -148,7 +128,7 @@ async def create_movie(
     payload: MovieCreateSchema,
     db: AsyncSession = Depends(get_db),
 ):
-    # дублікати за (name, date)
+    # перевірка дублікату (name, date)
     dup = await db.execute(
         select(MovieModel).where(
             and_(MovieModel.name == payload.name, MovieModel.date == payload.date)
@@ -157,7 +137,10 @@ async def create_movie(
     if dup.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"A movie with the name '{payload.name}' and release date '{payload.date}' already exists.",
+            detail=(
+                f"A movie with the name '{payload.name}' and release date "
+                f"'{payload.date}' already exists."
+            ),
         )
 
     movie = MovieModel(
@@ -170,13 +153,11 @@ async def create_movie(
         revenue=payload.revenue,
     )
     db.add(movie)
-    await db.flush()  # id
+    await db.flush()  # отримати id
 
-    # зв’язки
+    # звʼязки
     if payload.country:
-        country = await _get_or_create(
-            db, CountryModel, by={"code": payload.country}
-        )
+        country = await _get_or_create(db, CountryModel, by={"code": payload.country})
         movie.country = country
 
     if payload.genres:
@@ -191,13 +172,12 @@ async def create_movie(
 
     if payload.languages:
         movie.languages = [
-            await _get_or_create(db, LanguageModel, by={"name": l})
-            for l in payload.languages
+            await _get_or_create(db, LanguageModel, by={"name": lang_name})
+            for lang_name in payload.languages
         ]
 
     await db.commit()
     await db.refresh(movie)
-
     return _serialize_full(movie)
 
 
@@ -222,12 +202,14 @@ async def delete_movie(movie_id: int, db: AsyncSession = Depends(get_db)):
         )
     await db.delete(movie)
     await db.commit()
-    return  # 204 No Content
+    return  # 204
 
 
 @router.patch("/{movie_id}/")
 async def update_movie(
-    movie_id: int, payload: MovieUpdateSchema, db: AsyncSession = Depends(get_db)
+    movie_id: int,
+    payload: MovieUpdateSchema,
+    db: AsyncSession = Depends(get_db),
 ):
     res = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
     movie = res.scalar_one_or_none()
@@ -236,7 +218,7 @@ async def update_movie(
             status_code=404, detail="Movie with the given ID was not found."
         )
 
-    # часткове оновлення з валідацією з payload
+    # часткове оновлення
     try:
         if payload.name is not None:
             movie.name = payload.name
@@ -253,7 +235,6 @@ async def update_movie(
         if payload.revenue is not None:
             movie.revenue = payload.revenue
     except Exception:
-        # на випадок додаткових бізнес-обмежень у моделях
         raise HTTPException(status_code=400, detail="Invalid input data.")
 
     await db.commit()

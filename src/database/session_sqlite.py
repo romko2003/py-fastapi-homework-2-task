@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from config import get_settings
-from database import Base
+from .models import Base  # важливо: відносний імпорт, щоб не створювати цикл
 
 settings = get_settings()
 
@@ -14,48 +14,30 @@ sqlite_engine = create_async_engine(SQLITE_DATABASE_URL, echo=False)
 AsyncSQLiteSessionLocal = sessionmaker(  # type: ignore
     bind=sqlite_engine,
     class_=AsyncSession,
-    expire_on_commit=False
+    expire_on_commit=False,
 )
 
+# ==== потрібна функція get_db (для Depends у роутерах/тестах) ====
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with AsyncSQLiteSessionLocal() as session:
+        yield session
+# ================================================================
 
 async def get_sqlite_db() -> AsyncGenerator[AsyncSession, None]:
-    """
-    Provide an asynchronous database session.
-
-    This function returns an async generator yielding a new database session.
-    It ensures that the session is properly closed after use.
-
-    :return: An asynchronous generator yielding an AsyncSession instance.
-    """
+    """Alias: те саме, що й get_db, залишено для сумісності."""
     async with AsyncSQLiteSessionLocal() as session:
         yield session
 
 
 @asynccontextmanager
 async def get_sqlite_db_contextmanager() -> AsyncGenerator[AsyncSession, None]:
-    """
-    Provide an asynchronous database session using a context manager.
-
-    This function allows for managing the database session within a `with` statement.
-    It ensures that the session is properly initialized and closed after execution.
-
-    :return: An asynchronous generator yielding an AsyncSession instance.
-    """
+    """Контекст-менеджер для тестів: async with get_sqlite_db_contextmanager() as db: ..."""
     async with AsyncSQLiteSessionLocal() as session:
         yield session
 
 
 async def reset_sqlite_database() -> None:
-    """
-    Reset the SQLite database.
-
-    This function drops all existing tables and recreates them.
-    It is useful for testing purposes or when resetting the database is required.
-
-    Warning: This action is irreversible and will delete all stored data.
-
-    :return: None
-    """
+    """Скидає БД: drop_all + create_all (зручно для тестів)."""
     async with sqlite_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)

@@ -6,8 +6,6 @@ from typing import List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 
-# --- NESTED ENTITIES ---
-
 class CountrySchema(BaseModel):
     id: int
     code: str
@@ -18,8 +16,6 @@ class NamedEntitySchema(BaseModel):
     id: int
     name: str
 
-
-# --- RESPONSES ---
 
 class MovieBriefSchema(BaseModel):
     id: int
@@ -38,7 +34,6 @@ class MovieFullSchema(BaseModel):
     status: Optional[str] = None
     budget: Optional[float] = None
     revenue: Optional[float] = None
-
     country: Optional[CountrySchema] = None
     genres: List[NamedEntitySchema] = []
     actors: List[NamedEntitySchema] = []
@@ -53,8 +48,6 @@ class MoviesListResponse(BaseModel):
     total_items: int
 
 
-# --- REQUESTS ---
-
 _ALLOWED_STATUSES = {"Released", "Post Production", "In Production"}
 
 
@@ -66,12 +59,10 @@ class MovieCreateSchema(BaseModel):
     status: Optional[str] = None
     budget: Optional[float] = Field(default=None, ge=0)
     revenue: Optional[float] = Field(default=None, ge=0)
-
-    country: Optional[str] = None  # ISO 3166-1 alpha-3
+    country: Optional[str] = None
     genres: List[str] = []
     actors: List[str] = []
     languages: List[str] = []
-
 
     @field_validator("date")
     @classmethod
@@ -79,7 +70,6 @@ class MovieCreateSchema(BaseModel):
         if v > (dt.date.today() + dt.timedelta(days=365)):
             raise ValueError("date must not be more than one year in the future")
         return v
-
 
     @field_validator("status")
     @classmethod
@@ -100,14 +90,12 @@ class MovieUpdateSchema(BaseModel):
     budget: Optional[float] = Field(default=None, ge=0)
     revenue: Optional[float] = Field(default=None, ge=0)
 
-
     @field_validator("date")
     @classmethod
     def validate_date(cls, v: Optional[dt.date]) -> Optional[dt.date]:
         if v and v > (dt.date.today() + dt.timedelta(days=365)):
             raise ValueError("date must not be more than one year in the future")
         return v
-
 
     @field_validator("status")
     @classmethod
@@ -117,4 +105,3 @@ class MovieUpdateSchema(BaseModel):
         if v not in _ALLOWED_STATUSES:
             raise ValueError("status must be one of: Released | Post Production | In Production")
         return v
-
